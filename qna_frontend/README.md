@@ -1,82 +1,44 @@
-# Lightweight React Template for KAVIA
+# Q&A Frontend (React) – Ocean Professional
 
-This project provides a minimal React template with a clean, modern UI and minimal dependencies.
+A modern, lightweight React UI for asking questions and viewing ChatGPT-powered answers.
 
 ## Features
+- Top navigation with branding
+- Main workspace with question form and answer panel
+- Sidebar list for Q/A history (stored locally for now)
+- Ocean Professional theme with primary (#2563EB), secondary (#F59E0B), error (#EF4444)
+- Organized codebase: hooks, services, and utils for easy extension
+- Placeholder Chat API with a mock response (swap with real backend later)
 
-- **Lightweight**: No heavy UI frameworks - uses only vanilla CSS and React
-- **Modern UI**: Clean, responsive design with KAVIA brand styling
-- **Fast**: Minimal dependencies for quick loading times
-- **Simple**: Easy to understand and modify
+## Run locally
+- `npm start` – development server at http://localhost:3000
+- `npm test` – run tests
+- `npm run build` – production build
 
-## Getting Started
+## Project structure
+- `src/App.js` – main layout and Q/A logic
+- `src/index.css` – theme and component styles (Ocean Professional)
+- `src/hooks/useChatApi.js` – hook to call Chat API (mocked)
+- `src/services/historyService.js` – local persistence for Q/A history
+- `src/utils/dates.js` – small date formatting helper
 
-In the project directory, you can run:
-
-### `npm start`
-
-Runs the app in development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-### `npm test`
-
-Launches the test runner in interactive watch mode.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-## Customization
-
-### Colors
-
-The main brand colors are defined as CSS variables in `src/App.css`:
-
-```css
-:root {
-  --kavia-orange: #E87A41;
-  --kavia-dark: #1A1A1A;
-  --text-color: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(255, 255, 255, 0.1);
-}
+## Backend integration (TODO)
+Replace the mock in `src/hooks/useChatApi.js` with your REST call:
+```js
+const res = await fetch(process.env.REACT_APP_API_URL + '/chat/ask', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ question }),
+});
 ```
 
-### Components
+## Environment variables
+Create a `.env` file with:
+```
+REACT_APP_API_URL=https://your-backend.example.com
+```
+Do not commit secrets. The deployment pipeline should set the production values.
 
-This template uses pure HTML/CSS components instead of a UI framework. You can find component styles in `src/App.css`. 
-
-Common components include:
-- Buttons (`.btn`, `.btn-large`)
-- Container (`.container`)
-- Navigation (`.navbar`)
-- Typography (`.title`, `.subtitle`, `.description`)
-
-## Learn More
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## Notes
+- History is stored in `localStorage` under `qna_history`
+- The UI is responsive; the sidebar becomes stacked on smaller screens

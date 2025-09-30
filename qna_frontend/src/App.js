@@ -1,49 +1,204 @@
-import React, { useState, useEffect } from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useEffect, useMemo, useState } from 'react';
+import './index.css';
+import { useChatApi } from './hooks/useChatApi';
+import { saveHistoryItem, loadHistory, clearHistory } from './services/historyService';
+import { formatDateTimeShort } from './utils/dates';
 
 // PUBLIC_INTERFACE
 function App() {
-  const [theme, setTheme] = useState('light');
+  /**
+   * Main App component rendering top navbar, sidebar history, and main Q/A workspace.
+   * Integrates a ChatGPT-like API via the useChatApi hook and persists local history to localStorage.
+   */
+  const [question, setQuestion] = useState('');
+  const [history, setHistory] = useState(() => loadHistory());
+  const [selectedId, setSelectedId] = useState(null);
+  const { ask, isLoading, error, lastAnswer } = useChatApi();
 
-  // Effect to apply theme to document element
+  // derive the selected history item
+  const selectedItem = useMemo(() => {
+    if (!selectedId) return null;
+    return history.find(h => h.id === selectedId) || null;
+  }, [selectedId, history]);
+
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+    // if we just received an answer from ask(), sync to selected and history
+    if (lastAnswer && lastAnswer.tempId) {
+      const updated = history.map(h => h.id === lastAnswer.tempId ? { ...h, answer: lastAnswer.answer, updatedAt: Date.now() } : h);
+      setHistory(updated);
+      persistHistory(updated);
+    }
+  }, [lastAnswer]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // PUBLIC_INTERFACE
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  const persistHistory = (items) => {
+    // save to local storage and optionally to backend in the future
+    // TODO: integrate REST API for persistent storage
+    localStorage.setItem('qna_history', JSON.stringify(items));
   };
 
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = question.trim();
+    if (!trimmed) return;
+
+    // optimistic item with temp id
+    const tempId = `local-${Date.now()}`;
+    const newItem = {
+      id: tempId,
+      question: trimmed,
+      answer: '',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const nextHistory = [newItem, ...history];
+    setHistory(nextHistory);
+    setSelectedId(tempId);
+    persistHistory(nextHistory);
+    saveHistoryItem(newItem); // service hook for future backend
+
+    // call chat api
+    await ask(trimmed, tempId);
+    setQuestion('');
+  };
+
+  const onSelectHistory = (id) => setSelectedId(id);
+
+  const onClearHistory = () => {
+    if (!window.confirm('Clear all Q/A history?')) return;
+    clearHistory();
+    setHistory([]);
+    setSelectedId(null);
+  };
+
+  const displayedAnswer = selectedItem?.answer || (lastAnswer?.answer && selectedItem?.id === lastAnswer?.tempId ? lastAnswer.answer : '');
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <button 
-          className="theme-toggle" 
-          onClick={toggleTheme}
-          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-        >
-          {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
-        </button>
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <p>
-          Current theme: <strong>{theme}</strong>
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div className="app">
+      <TopNav />
+
+      <div className="layout">
+        <aside className="sidebar">
+          <div className="card">
+            <div className="sidebar-header">
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="badge">History</span>
+                </div>
+                <div className="helper" style={{ marginTop: 6 }}>Your recent Q/As</div>
+              </div>
+              <button className="btn secondary" onClick={onClearHistory} title="Clear history">
+                🧹 Clear
+              </button>
+            </div>
+            <div className="history-list">
+              {history.length === 0 && (
+                <div className="helper" style={{ padding: 12 }}>
+                  No history yet. Ask your first question!
+                </div>
+              )}
+              {history.map(item => (
+                <button
+                  key={item.id}
+                  className="history-item"
+                  onClick={() => onSelectHistory(item.id)}
+                  aria-label={`Open Q/A from ${formatDateTimeShort(item.createdAt)}`}
+                >
+                  <div className="history-title">{truncate(item.question, 90)}</div>
+                  <div className="history-sub">
+                    {formatDateTimeShort(item.createdAt)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        <main className="main">
+          <div className="card">
+            <div className="section-title">
+              <div className="brand-mark">Q</div>
+              <div>
+                <div className="brand-title">Ask a question</div>
+                <div className="brand-sub">Powered by ChatGPT (placeholder integration)</div>
+              </div>
+            </div>
+
+            <form onSubmit={onSubmit} className="question-form">
+              <label htmlFor="question" className="helper">Your question</label>
+              <textarea
+                id="question"
+                rows="4"
+                className="input"
+                placeholder="Type your question here..."
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+              />
+              <div className="actions">
+                <div className="helper">
+                  Tip: Be specific. You can paste code snippets or include context.
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button type="submit" className="btn" disabled={isLoading}>
+                    {isLoading ? 'Thinking…' : 'Ask'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    onClick={() => setQuestion('')}
+                    disabled={isLoading || !question}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <hr className="sep" />
+
+            <div className="answer-panel">
+              <div className="answer-title">
+                <span className="badge">Answer</span>
+                {isLoading && <span className="helper">Generating response…</span>}
+              </div>
+              <div className="answer-content">
+                {error && <span style={{ color: 'var(--error)' }}>Error: {error}</span>}
+                {!error && (displayedAnswer ? displayedAnswer : <span className="helper">Your answer will appear here.</span>)}
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   );
+}
+
+// PUBLIC_INTERFACE
+function TopNav() {
+  /** Top navigation bar with branding and actions (theme placeholder, settings placeholder). */
+  return (
+    <nav className="navbar">
+      <div className="navbar-inner">
+        <div className="brand">
+          <div className="brand-mark">A</div>
+          <div>
+            <div className="brand-title">Ask & Answer</div>
+            <div className="brand-sub">Ocean Professional</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="badge" title="Design theme name">Ocean</span>
+          <button className="btn secondary" type="button" onClick={() => alert('TODO: Settings')}>
+            ⚙️ Settings
+          </button>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function truncate(text, n) {
+  if (!text) return '';
+  return text.length > n ? text.slice(0, n - 1) + '…' : text;
 }
 
 export default App;
