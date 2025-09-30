@@ -13,6 +13,8 @@ function App() {
   const [question, setQuestion] = useState('');
   const [history, setHistory] = useState(() => loadHistory());
   const [selectedId, setSelectedId] = useState(null);
+  // Track the active in-flight question by its temporary id to avoid answer misattribution
+  const [activeTempId, setActiveTempId] = useState(null);
   const { ask, isLoading, error, lastAnswer } = useChatApi();
 
   // derive the selected history item
@@ -24,9 +26,15 @@ function App() {
   useEffect(() => {
     // if we just received an answer from ask(), sync to selected and history
     if (lastAnswer && lastAnswer.tempId) {
-      const updated = history.map(h => h.id === lastAnswer.tempId ? { ...h, answer: lastAnswer.answer, updatedAt: Date.now() } : h);
+      const updated = history.map(h =>
+        h.id === lastAnswer.tempId ? { ...h, answer: lastAnswer.answer, updatedAt: Date.now() } : h
+      );
       setHistory(updated);
       persistHistory(updated);
+      // Clear active when the specific tempId completes
+      if (activeTempId === lastAnswer.tempId) {
+        setActiveTempId(null);
+      }
     }
   }, [lastAnswer]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -53,15 +61,24 @@ function App() {
     const nextHistory = [newItem, ...history];
     setHistory(nextHistory);
     setSelectedId(tempId);
+    setActiveTempId(tempId);
     persistHistory(nextHistory);
     saveHistoryItem(newItem); // service hook for future backend
 
     // call chat api
-    await ask(trimmed, tempId);
+    const res = await ask(trimmed, tempId);
+    // If ask failed (res null), clear activeTempId to avoid stale loading state
+    if (!res) {
+      setActiveTempId(null);
+    }
     setQuestion('');
   };
 
-  const onSelectHistory = (id) => setSelectedId(id);
+  const onSelectHistory = (id) => {
+    // Prevent switching context while generating an answer for a specific item
+    if (isLoading && activeTempId && id !== activeTempId) return;
+    setSelectedId(id);
+  };
 
   const onClearHistory = () => {
     if (!window.confirm('Clear all Q/A history?')) return;
@@ -70,7 +87,21 @@ function App() {
     setSelectedId(null);
   };
 
-  const displayedAnswer = selectedItem?.answer || (lastAnswer?.answer && selectedItem?.id === lastAnswer?.tempId ? lastAnswer.answer : '');
+  // Only use lastAnswer for display if it belongs to the selected item and is the active one (during loading) or completed for that item
+  const displayedAnswer = (() => {
+    if (!selectedItem) return '';
+    // Prefer the stored answer in history if available
+    if (selectedItem.answer) return selectedItem.answer;
+    // During loading, show lastAnswer only if it matches the selected item and is currently active
+    if (isLoading && activeTempId && selectedItem.id === activeTempId && lastAnswer?.tempId === activeTempId) {
+      return lastAnswer.answer || '';
+    }
+    // After loading, if lastAnswer corresponds to this item, allow display as fallback
+    if (!isLoading && lastAnswer?.tempId === selectedItem.id) {
+      return lastAnswer.answer || '';
+    }
+    return '';
+  })();
 
   return (
     <div className="app">
@@ -96,19 +127,24 @@ function App() {
                   No history yet. Ask your first question!
                 </div>
               )}
-              {history.map(item => (
-                <button
-                  key={item.id}
-                  className="history-item"
-                  onClick={() => onSelectHistory(item.id)}
-                  aria-label={`Open Q/A from ${formatDateTimeShort(item.createdAt)}`}
-                >
-                  <div className="history-title">{truncate(item.question, 90)}</div>
-                  <div className="history-sub">
-                    {formatDateTimeShort(item.createdAt)}
-                  </div>
-                </button>
-              ))}
+              {history.map(item => {
+                const disabled = isLoading && activeTempId && item.id !== activeTempId;
+                return (
+                  <button
+                    key={item.id}
+                    className="history-item"
+                    onClick={() => onSelectHistory(item.id)}
+                    aria-label={`Open Q/A from ${formatDateTimeShort(item.createdAt)}`}
+                    disabled={disabled}
+                    title={disabled ? 'Please wait for the current answer to finish.' : undefined}
+                  >
+                    <div className="history-title">{truncate(item.question, 90)}</div>
+                    <div className="history-sub">
+                      {formatDateTimeShort(item.createdAt)}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </aside>
@@ -158,7 +194,12 @@ function App() {
             <div className="answer-panel">
               <div className="answer-title">
                 <span className="badge">Answer</span>
-                {isLoading && <span className="helper">Generating response…</span>}
+                {isLoading && activeTempId && (
+                  <span className="helper">Generating response for selected question…</span>
+                )}
+              </div>
+              <div className="helper" style={{ marginTop: 6 }}>
+                Note: This is a placeholder integration. Answers are mock-generated for demo consistency.
               </div>
               <div className="answer-content">
                 {error && <span style={{ color: 'var(--error)' }}>Error: {error}</span>}

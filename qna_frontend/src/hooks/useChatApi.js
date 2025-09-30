@@ -46,9 +46,9 @@ async function mockAnswer(question) {
   // very simple mocking to simulate "thinking"
   await delay(700);
   const templates = [
-    `Here's a concise answer:\n\n- You asked: "${question}"\n- Key points: clarity, steps, and references.\n\nNext steps:\n1) Validate assumptions\n2) Implement incrementally\n3) Test thoroughly`,
-    `Great question! In summary:\n\n"${question}"\n\nConsider:\n- Trade-offs\n- Performance\n- Edge cases\n\nUseful tip: Start with a minimal working solution.`,
-    `To approach "${question}", break it down:\n\n1) Define the goal\n2) Identify constraints\n3) Prototype and iterate\n\nThis ensures clarity and reduces risk.`
+    `Mock response (demo):\n\nYou asked: "${question}"\n\nHere's a structured, non-factual placeholder to guide you:\n- Identify the problem precisely\n- Outline possible approaches\n- Choose one and iterate\n\nNext steps:\n1) Validate assumptions\n2) Implement incrementally\n3) Test thoroughly`,
+    `Mock response (demo):\n\nTopic: "${question}"\n\nConsider:\n- Trade-offs\n- Performance\n- Edge cases\n\nTip: Start with the simplest working solution and refine.`,
+    `Mock response (demo):\n\nApproach for "${question}":\n\n1) Define the goal\n2) Identify constraints\n3) Prototype and iterate\n\nThis ensures clarity and reduces risk.`
   ];
   const idx = Math.abs(hash(question)) % templates.length;
   return templates[idx];
